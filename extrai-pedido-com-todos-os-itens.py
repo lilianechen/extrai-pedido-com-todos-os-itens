@@ -85,8 +85,8 @@ def criar_xml_por_pedidos(cnpj, pedidos, root, namespaces):
         detalhes_itens.append({
             "CodigoFab": codigo_fab.text if codigo_fab is not None else "",
             "DescricaoResumida": descricao_resumida.text if descricao_resumida is not None else "",
-            "Qtde": int(qtde.text) if qtde is not None and qtde.text.isdigit() else 0,
-            "QtdeEmb": int(qtde_emb.text) if qtde_emb is not None and qtde_emb.text.isdigit() else 0
+            "Qtde": int(float(qtde.text)) if qtde is not None and qtde.text.replace('.', '', 1).isdigit() else 0,
+            "QtdeEmb": int(float(qtde_emb.text)) if qtde_emb is not None and qtde_emb.text.replace('.', '', 1).isdigit() else 0
         })
     
     grupo = pedidos[0].find("Grupo", namespaces).text if pedidos else "sem-grupo"
