@@ -1,10 +1,9 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-import os
-import glob
+import io
 
-def processar_pedidos(xml_path, output_dir):
+def processar_pedidos(xml_content):
     namespaces = {
         "diffgr": "urn:schemas-microsoft-com:xml-diffgram-v1",
         "msdata": "urn:schemas-microsoft-com:xml-msdata"
@@ -13,13 +12,13 @@ def processar_pedidos(xml_path, output_dir):
     ET.register_namespace("msdata", namespaces["msdata"])
     
     try:
-        tree = ET.parse(xml_path)
+        tree = ET.ElementTree(ET.fromstring(xml_content))
         root = tree.getroot()
         pedidos = root.findall(".//Pedidos", namespaces)
         
         if not pedidos:
-            st.warning(f"Nenhum pedido encontrado no arquivo: {xml_path}")
-            return
+            st.warning("Nenhum pedido encontrado no arquivo XML.")
+            return None
         
         cnpj_to_pedidos = defaultdict(list)
         todos_itens = set()
@@ -33,7 +32,7 @@ def processar_pedidos(xml_path, output_dir):
                 todos_itens.add(codigo_fab.text)
 
         itens_cobertos = set()
-        arquivos_gerados = 0
+        arquivos_gerados = []
 
         while itens_cobertos != todos_itens:
             melhor_cnpj = None
@@ -54,19 +53,19 @@ def processar_pedidos(xml_path, output_dir):
                 st.error("Erro: Não foi possível encontrar um CNPJ que cubra os itens restantes.")
                 break
             
-            criar_xml_por_pedidos(melhor_cnpj, melhor_pedidos, root, output_dir, namespaces, arquivos_gerados + 1)
+            xml_output = criar_xml_por_pedidos(melhor_cnpj, melhor_pedidos, root, namespaces)
             itens_cobertos.update(melhor_itens)
-            arquivos_gerados += 1
+            arquivos_gerados.append(xml_output)
 
-        if itens_cobertos != todos_itens:
-            faltando = todos_itens - itens_cobertos
-            st.error(f"Erro: Não foi possível cobrir todos os itens. Itens faltando: {faltando}")
+        return arquivos_gerados
     except ET.ParseError as e:
-        st.error(f"Erro ao analisar o XML: {xml_path}. Detalhes: {e}")
+        st.error(f"Erro ao analisar o XML. Detalhes: {e}")
+        return None
     except Exception as e:
-        st.error(f"Erro inesperado ao processar o arquivo {xml_path}. Detalhes: {e}")
+        st.error(f"Erro inesperado ao processar o arquivo. Detalhes: {e}")
+        return None
 
-def criar_xml_por_pedidos(cnpj, pedidos, root, output_dir, namespaces, arquivo_index):
+def criar_xml_por_pedidos(cnpj, pedidos, root, namespaces):
     dataset = root.find(".//NewDataSet", namespaces)
 
     for pedido in dataset.findall(".//Pedidos", namespaces):
@@ -78,28 +77,23 @@ def criar_xml_por_pedidos(cnpj, pedidos, root, output_dir, namespaces, arquivo_i
         dataset.append(pedido)
     
     grupo = pedidos[0].find("Grupo", namespaces).text if pedidos else "sem-grupo"
-    output_file = f"{output_dir}/{grupo}_{cnpj}_{arquivo_index}.xml"
-    os.makedirs(output_dir, exist_ok=True)
+    output_io = io.BytesIO()
     tree = ET.ElementTree(root)
-    tree.write(output_file, encoding="utf-8", xml_declaration=True)
-    st.success(f"Arquivo gerado: {output_file}")
-
-def processar_todos_os_xmls(input_dir, output_dir):
-    xml_files = glob.glob(os.path.join(input_dir, "*.xml"))
-    if not xml_files:
-        st.warning(f"Nenhum arquivo XML encontrado no diretório: {input_dir}")
-        return
-
-    for xml_file in xml_files:
-        st.write(f"Processando arquivo: {xml_file}")
-        processar_pedidos(xml_file, output_dir)
+    tree.write(output_io, encoding="utf-8", xml_declaration=True)
+    return output_io.getvalue()
 
 st.title("Processador de Pedidos XML")
-input_dir = st.text_input("Diretório de entrada dos arquivos XML:")
-output_dir = st.text_input("Diretório de saída dos arquivos gerados:")
+uploaded_file = st.file_uploader("Carregue um arquivo XML", type=["xml"])
 
-if st.button("Processar XMLs"):
-    if input_dir and output_dir:
-        processar_todos_os_xmls(input_dir, output_dir)
-    else:
-        st.error("Por favor, insira os diretórios de entrada e saída.")
+if uploaded_file is not None:
+    xml_content = uploaded_file.read().decode("utf-8")
+    arquivos_processados = processar_pedidos(xml_content)
+    
+    if arquivos_processados:
+        for i, arquivo in enumerate(arquivos_processados):
+            st.download_button(
+                label=f"Baixar XML Processado {i+1}",
+                data=arquivo,
+                file_name=f"pedido_processado_{i+1}.xml",
+                mime="application/xml"
+            )
