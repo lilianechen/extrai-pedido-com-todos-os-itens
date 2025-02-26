@@ -53,9 +53,9 @@ def processar_pedidos(xml_content):
                 st.error("Erro: Não foi possível encontrar um CNPJ que cubra os itens restantes.")
                 break
             
-            xml_output = criar_xml_por_pedidos(melhor_cnpj, melhor_pedidos, root, namespaces)
+            xml_output, file_name = criar_xml_por_pedidos(melhor_cnpj, melhor_pedidos, root, namespaces)
             itens_cobertos.update(melhor_itens)
-            arquivos_gerados.append(xml_output)
+            arquivos_gerados.append((xml_output, file_name))
 
         return arquivos_gerados
     except ET.ParseError as e:
@@ -80,7 +80,9 @@ def criar_xml_por_pedidos(cnpj, pedidos, root, namespaces):
     output_io = io.BytesIO()
     tree = ET.ElementTree(root)
     tree.write(output_io, encoding="utf-8", xml_declaration=True)
-    return output_io.getvalue()
+    
+    file_name = f"pedido_{grupo}_{cnpj}.xml"
+    return output_io.getvalue(), file_name
 
 st.title("Processador de Pedidos XML")
 uploaded_file = st.file_uploader("Carregue um arquivo XML", type=["xml"])
@@ -90,10 +92,10 @@ if uploaded_file is not None:
     arquivos_processados = processar_pedidos(xml_content)
     
     if arquivos_processados:
-        for i, arquivo in enumerate(arquivos_processados):
+        for arquivo, file_name in arquivos_processados:
             st.download_button(
-                label=f"Baixar XML Processado {i+1}",
+                label=f"Baixar {file_name}",
                 data=arquivo,
-                file_name=f"pedido_processado_{i+1}.xml",
+                file_name=file_name,
                 mime="application/xml"
             )
