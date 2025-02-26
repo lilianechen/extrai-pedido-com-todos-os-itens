@@ -22,14 +22,27 @@ def processar_pedidos(xml_content):
         
         cnpj_to_pedidos = defaultdict(list)
         todos_itens = set()
+        detalhes_itens = []
 
         for pedido in pedidos:
             cnpj_loja_compradora = pedido.find("CNPJLojaCompradora", namespaces)
             codigo_fab = pedido.find("CodigoFab", namespaces)
+            descricao_resumida = pedido.find("DescricaoResumida", namespaces)
+            qtde = pedido.find("Qtde", namespaces)
+            qtde_emb = pedido.find("QtdeEmb", namespaces)
             
             if cnpj_loja_compradora is not None and codigo_fab is not None:
                 cnpj_to_pedidos[cnpj_loja_compradora.text].append(pedido)
                 todos_itens.add(codigo_fab.text)
+                detalhes_itens.append({
+                    "CodigoFab": codigo_fab.text,
+                    "DescricaoResumida": descricao_resumida.text if descricao_resumida is not None else "",
+                    "Qtde": qtde.text if qtde is not None else "",
+                    "QtdeEmb": qtde_emb.text if qtde_emb is not None else ""
+                })
+
+        st.write("### Itens do Pedido")
+        st.table(detalhes_itens)
 
         itens_cobertos = set()
         arquivos_gerados = []
